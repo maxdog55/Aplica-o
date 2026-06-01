@@ -16,6 +16,8 @@ const {
 } = process.env;
 
 const dry = DRY_RUN === "1" || DRY_RUN === "true";
+// Vários destinatários: separa os chat ids por vírgula no TELEGRAM_CHAT_ID (ex.: "111,222")
+const CHAT_IDS = (TELEGRAM_CHAT_ID || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 // ---------- Datas / recorrência (espelhado de app.js) ----------
 const ymd = (y, m, d) => y * 10000 + m * 100 + d;
@@ -57,14 +59,16 @@ const ddmm = (p) => `${String(p.d).padStart(2, "0")}/${String(p.m).padStart(2, "
 // ---------- Telegram ----------
 async function sendTelegram(text) {
   if (dry) { console.log("\n--- (DRY_RUN) Mensagem Telegram ---\n" + text + "\n-----------------------------------"); return; }
-  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: "HTML", disable_web_page_preview: true }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok) throw new Error("Telegram falhou: " + JSON.stringify(data));
-  console.log("Mensagem enviada.");
+  for (const chat_id of CHAT_IDS) {
+    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error("Telegram falhou (chat " + chat_id + "): " + JSON.stringify(data));
+    console.log("Mensagem enviada para " + chat_id + ".");
+  }
 }
 
 // ---------- Supabase ----------
@@ -81,7 +85,7 @@ async function main() {
   for (const [k, v] of Object.entries({ SUPABASE_URL, SUPABASE_SERVICE_KEY })) {
     if (!v) { console.error("Falta a variável de ambiente:", k); process.exit(1); }
   }
-  if (!dry && (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID)) {
+  if (!dry && (!TELEGRAM_BOT_TOKEN || CHAT_IDS.length === 0)) {
     console.error("Faltam TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (ou usa DRY_RUN=1)."); process.exit(1);
   }
 
