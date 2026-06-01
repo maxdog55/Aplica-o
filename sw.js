@@ -2,7 +2,7 @@
    Os dados (Supabase) e a biblioteca (CDN) vão sempre à rede; só os ficheiros
    locais da app é que são guardados em cache. Sobe a versão quando alterares
    index.html / app.js / styles.css para forçar atualização. */
-const CACHE = "contas-v1";
+const CACHE = "contas-v2";
 const SHELL = [
   "./",
   "./index.html",
