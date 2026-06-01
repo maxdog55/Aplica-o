@@ -1,0 +1,12 @@
+# Segredos e dependências — nunca versionar
+.env
+notifier/.env
+node_modules/
+
+# Configuração local de ferramentas (não publicar)
+.claude/
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini

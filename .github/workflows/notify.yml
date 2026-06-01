@@ -1,0 +1,39 @@
+name: Avisos de pagamentos
+
+on:
+  schedule:
+    # 07:00 UTC ≈ 08:00 em Portugal (o script ajusta a data para Europe/Lisbon).
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}   # permite correr à mão no separador "Actions"
+
+permissions:
+  contents: write          # necessário para o commit "keepalive"
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enviar avisos
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node notifier/notify.mjs
+
+      - name: Keepalive (evita que o GitHub desative o cron após 60 dias sem atividade)
+        if: github.event_name == 'schedule'
+        run: |
+          mkdir -p .github
+          date -u +%F > .github/last-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/last-run.txt
+          git commit -m "keepalive $(date -u +%F)" || echo "nada para commit"
+          git push || echo "push ignorado"

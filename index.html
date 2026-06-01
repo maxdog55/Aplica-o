@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="description" content="Calendário pessoal de contas a pagar, com avisos." />
+  <title>Contas a Pagar</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+  <!-- ======================= AVISO DE CONFIGURAÇÃO ======================= -->
+  <section id="setup-notice" class="screen hidden">
+    <div class="card narrow">
+      <h1>⚙️ Falta configurar</h1>
+      <p>Ainda não preencheste as chaves do Supabase no ficheiro <code>config.js</code>.</p>
+      <p>Abre o <strong>DOCUMENTACAO.md</strong> e segue a secção <em>“Configuração inicial”</em>.
+         São 2 valores: <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code>.</p>
+    </div>
+  </section>
+
+  <!-- ============================= LOGIN ============================= -->
+  <section id="auth-screen" class="screen hidden">
+    <div class="card narrow">
+      <h1>💶 Contas a Pagar</h1>
+      <p class="muted">Entra para veres e gerires os teus pagamentos.</p>
+      <form id="auth-form" autocomplete="on">
+        <label>Email
+          <input id="auth-email" type="email" required autocomplete="username" placeholder="o-teu@email.pt" />
+        </label>
+        <label>Palavra-passe
+          <input id="auth-password" type="password" required autocomplete="current-password" placeholder="••••••••" minlength="6" />
+        </label>
+        <p id="auth-error" class="error hidden"></p>
+        <button id="auth-submit" type="submit" class="btn primary block">Entrar</button>
+        <button id="auth-toggle" type="button" class="btn link block">Primeira vez? Criar conta</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============================== APP ============================== -->
+  <main id="app-screen" class="screen hidden">
+    <header class="topbar">
+      <h1 class="brand">💶 Contas</h1>
+      <button id="btn-settings" class="icon-btn" title="Definições" aria-label="Definições">⚙️</button>
+    </header>
+
+    <!-- Cartões de totais -->
+    <div class="totals">
+      <div class="total-card">
+        <span class="total-label">Próximos 7 dias</span>
+        <span id="total-week" class="total-value">—</span>
+      </div>
+      <div class="total-card">
+        <span class="total-label">Próximos 30 dias</span>
+        <span id="total-month" class="total-value">—</span>
+      </div>
+    </div>
+
+    <!-- Separadores -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="lista">Próximos</button>
+      <button class="tab" data-tab="calendario">Calendário</button>
+    </nav>
+
+    <!-- VISTA: Lista de próximos -->
+    <section id="tab-lista" class="tab-panel">
+      <div id="lista-vazia" class="empty hidden">
+        <p>Sem pagamentos próximos. 🎉</p>
+        <p class="muted">Toca em <strong>＋</strong> para adicionar o primeiro.</p>
+      </div>
+      <ul id="lista" class="lista"></ul>
+    </section>
+
+    <!-- VISTA: Calendário -->
+    <section id="tab-calendario" class="tab-panel hidden">
+      <div class="cal-header">
+        <button id="cal-prev" class="icon-btn" aria-label="Mês anterior">‹</button>
+        <h2 id="cal-title">—</h2>
+        <button id="cal-next" class="icon-btn" aria-label="Mês seguinte">›</button>
+      </div>
+      <div class="cal-weekdays">
+        <span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+      <div id="cal-day-detail" class="day-detail hidden">
+        <h3 id="cal-day-title">—</h3>
+        <ul id="cal-day-list" class="lista compact"></ul>
+      </div>
+    </section>
+
+    <!-- Botão flutuante adicionar -->
+    <button id="btn-add" class="fab" aria-label="Adicionar pagamento">＋</button>
+  </main>
+
+  <!-- ===================== MODAL: ADICIONAR/EDITAR ===================== -->
+  <div id="modal-form" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="form-title">Novo pagamento</h2>
+        <button id="form-close" class="icon-btn" aria-label="Fechar">✕</button>
+      </div>
+      <form id="expense-form">
+        <input type="hidden" id="f-id" />
+        <label>Nome *
+          <input id="f-name" type="text" required maxlength="80" placeholder="Ex.: Seguro do carro" />
+        </label>
+        <label>Valor (€) *
+          <input id="f-amount" type="number" inputmode="decimal" step="0.01" min="0" required placeholder="0,00" />
+        </label>
+        <label>Data *
+          <input id="f-date" type="date" required />
+        </label>
+        <label>Repetição
+          <select id="f-recurrence">
+            <option value="once">Uma só vez</option>
+            <option value="monthly">Todos os meses</option>
+            <option value="yearly" selected>Todos os anos</option>
+          </select>
+        </label>
+        <label>Avisar quantos dias antes
+          <input id="f-reminder" type="number" min="0" max="60" step="1" value="7" />
+          <small class="muted">Recebes sempre um aviso também no próprio dia.</small>
+        </label>
+        <label>Categoria
+          <input id="f-category" type="text" maxlength="40" placeholder="Ex.: Casa, Carro, Seguros (opcional)" />
+        </label>
+        <label>Notas
+          <textarea id="f-notes" rows="2" maxlength="300" placeholder="(opcional)"></textarea>
+        </label>
+        <label class="row">
+          <input id="f-active" type="checkbox" checked />
+          <span>Ativo (recebe avisos)</span>
+        </label>
+        <p id="form-error" class="error hidden"></p>
+        <div class="modal-actions">
+          <button id="form-delete" type="button" class="btn danger hidden">Apagar</button>
+          <button type="submit" class="btn primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== MODAL: DEFINIÇÕES ===================== -->
+  <div id="modal-settings" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Definições</h2>
+        <button id="settings-close" class="icon-btn" aria-label="Fechar">✕</button>
+      </div>
+      <div class="settings-body">
+        <h3>📲 Avisos no Telegram</h3>
+        <p class="muted">Os avisos chegam por Telegram (mesmo com a app fechada). Configuração feita uma vez —
+           passos detalhados no <code>DOCUMENTACAO.md</code>:</p>
+        <ol class="muted small">
+          <li>No Telegram, fala com <strong>@BotFather</strong> → <code>/newbot</code> → guarda o <em>token</em>.</li>
+          <li>Envia uma mensagem ao teu bot e obtém o teu <em>chat id</em> (ver documentação).</li>
+          <li>Coloca <em>token</em> e <em>chat id</em> nos <strong>Secrets</strong> do GitHub Actions.</li>
+        </ol>
+        <hr />
+        <p class="muted small">Sessão iniciada como <strong id="settings-email">—</strong>.</p>
+        <button id="btn-logout" class="btn block">Terminar sessão</button>
+        <p class="muted small center">Contas a Pagar · uso pessoal</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indicador de carregamento -->
+  <div id="loader" class="loader hidden"><div class="spinner"></div></div>
+
+</body>
+</html>
